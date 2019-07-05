@@ -11,14 +11,14 @@ class QFunc:
         self.learn_tmp_action = None
         self.gamma = gamma
 
-    def predict(self, state) -> [float]:
+    def get_action_values(self, state) -> [float]:
         return self.func[self.get_state_id_func(state)]
 
     def get_value(self, state, action) -> float:
         return self.func[self.get_state_id_func(state)][action]
 
     def get_action(self, state) -> int:
-        return np.argmax(self.predict(state))
+        return np.argmax(self.get_action_values(state))
 
     def reset_learn(self):
         self.learn_tmp_state = None
@@ -34,7 +34,7 @@ class QFunc:
 
     def get_softmax_action(self, state, *, theta=0.2) -> int:
         self.learn_tmp_state = state
-        p = np.exp(theta * self.predict(state))
+        p = np.exp(theta * self.get_action_values(state))
         psum = np.sum(p)
         p = p / psum
         self.learn_tmp_action = np.random.choice(np.arange(0, self.num_action), p=p)
@@ -45,3 +45,4 @@ class QFunc:
 
     def set_value(self, state, action, target):
         self.func[self.get_state_id_func(state)][action] = target
+

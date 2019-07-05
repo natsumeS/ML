@@ -8,7 +8,7 @@ class QLearning(QFunc):
         # calculate td error
         td_error = reward
         if not done:
-            td_error += self.gamma * np.max(self.predict(state))
+            td_error += self.gamma * np.max(self.get_action_values(state))
         td_error -= self.get_value(self.learn_tmp_state, self.learn_tmp_action)
 
         # update q value
@@ -67,3 +67,24 @@ class Sarsa(QFunc):
     def done_end_update(self, reward, alpha=0.2):
         td_error = reward - self.get_value(self.learn_tmp_state, self.learn_tmp_action)
         self.add_value(self.learn_tmp_state, self.learn_tmp_action, alpha * td_error)
+
+
+class ActorCritic(QFunc):
+    def __init__(self, num_state: int, num_action: int, get_state_id_func: Callable[..., int], *, gamma=0.99):
+        super().__init__(num_state, num_action, get_state_id_func, gamma=gamma)
+        self.value_func = np.zeros(num_state)
+
+    def get_action(self, state) -> int:
+        return super().get_softmax_action(state, theta=1.0)
+
+    def update(self, state, reward, done, *, alpha=0.2, beta=0.1):
+        # calculate td error by Value func
+        td_error = reward
+        if not done:
+            td_error += self.gamma * self.value_func[self.get_state_id_func(state)]
+        td_error -= self.value_func[self.get_state_id_func(self.learn_tmp_state)]
+
+        # update q and v value
+        self.value_func[self.get_state_id_func(self.learn_tmp_state)] += alpha * td_error
+        self.add_value(self.learn_tmp_state, self.learn_tmp_action, beta * td_error)
+
