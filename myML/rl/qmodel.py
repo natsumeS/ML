@@ -8,7 +8,7 @@ class QLearning(QFunc):
         # calculate td error
         td_error = reward
         if not done:
-            td_error += self.gamma * np.max(self.get_action_values(state))
+            td_error += self.gamma * np.max(self.predict(state))
         td_error -= self.get_value(self.learn_tmp_state, self.learn_tmp_action)
 
         # update q value
