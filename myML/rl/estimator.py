@@ -78,7 +78,7 @@ class QFunc(QBaseModel):
 
 
 class QNet(QBaseModel):
-    def __init__(self, model: keras.Sequential, num_action: int, *, state_into_input_func=None, gamma=0.99):
+    def __init__(self, model: keras.Model, num_action: int, *, state_into_input_func=None, gamma=0.99):
         super().__init__(num_action, gamma=gamma)
         self.model = model
 
