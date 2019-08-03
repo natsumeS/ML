@@ -21,12 +21,12 @@ class PPOLearner(AsyncLearner):
         self.train_buffer = []
 
     def push_train_buffer(self, state, action, reward):
-        self.train_buffer.append([state, action, reward])
+        self.train_buffer.append((state, action, reward))
 
     def get_data_from_train_buffer(self):
-        batch_size = self.batch_size if len(self.train_buffer[0]) > self.batch_size else len(self.train_buffer[0])
+        batch_size = self.batch_size if len(self.train_buffer) > self.batch_size else len(self.train_buffer)
 
-        datas_index = random.sample(range(len(self.train_buffer[0])), batch_size)
+        datas_index = random.sample(range(len(self.train_buffer)), batch_size)
 
         # rearange dates
         states = []
@@ -49,7 +49,6 @@ class PPOLearner(AsyncLearner):
             # get learning data
             with self.lock:
                 states, actions, advantages = self.get_data_from_train_buffer()
-
             # get policy and value
             policies, values = self.model(states)
             old_policies, _ = self.old_model(states)
@@ -68,6 +67,7 @@ class PPOLearner(AsyncLearner):
             self.optimizer.update()
         # update old model
         self.old_model = self.copy_model()
+        self.clear_buffer()
 
 
 class PPO:

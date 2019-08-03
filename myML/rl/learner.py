@@ -29,20 +29,6 @@ class Learner(metaclass=ABCMeta):
     def get_data_from_train_buffer(self):
         pass
 
-    # def get_train_buffer(self):
-    #     # get train data
-    #     states, actions, advantages = self.train_buffer
-    #
-    #     # clear buffer
-    #     self.train_buffer = [[], [], []]
-    #
-    #     # rearange data
-    #     states = np.array(states).astype(np.float32)
-    #     actions = np.array(actions).astype(np.int32)
-    #     advantages = np.array(advantages).astype(np.float32)
-    #
-    #     return states, actions, advantages
-
     def get_model(self):
         return self.model
 
