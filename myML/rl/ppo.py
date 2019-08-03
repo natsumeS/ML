@@ -3,26 +3,52 @@ import numpy as np
 import chainer
 import chainer.links as L
 import chainer.functions as F
-import threading
+import threading, random
 
-from myML.rl.model import DisCreteSoftMaxPolicyValueModel
+from myML.rl.model import PolicyValueModel, DisCreteSoftMaxPolicyValueModel
 from myML.rl.learner import AsyncLearner
 
 
 class PPOLearner(AsyncLearner):
-    def __init__(self, model: DisCreteSoftMaxPolicyValueModel, optimizer: chainer.Optimizer, *, batch_size=32,
+    def __init__(self, model: PolicyValueModel, optimizer: chainer.Optimizer, *, batch_size=32,
                  num_train_per_episode=15, eps=0.2):
         super().__init__(model, optimizer, batch_size=batch_size)
         self.old_model = self.copy_model()
         self.num_train_per_episode = num_train_per_episode
         self.eps = eps
 
+    def clear_buffer(self):
+        self.train_buffer = []
+
+    def push_train_buffer(self, state, action, reward):
+        self.train_buffer.append([state, action, reward])
+
+    def get_data_from_train_buffer(self):
+        batch_size = self.batch_size if len(self.train_buffer[0]) > self.batch_size else len(self.train_buffer[0])
+
+        datas_index = random.sample(range(len(self.train_buffer[0])), batch_size)
+
+        # rearange dates
+        states = []
+        actions = []
+        advantages = []
+        for index in datas_index:
+            state, action, advantage = self.train_buffer[index]
+            states.append(state)
+            actions.append(action)
+            advantages.append(advantage)
+
+        states = np.array(states).astype(np.float32)
+        actions = np.array(actions).astype(np.int32)
+        advantages = np.array(advantages).astype(np.float32)
+        return states, actions, advantages
+
     def update_model(self):
         # start minibatch learning
         for t in range(self.num_train_per_episode):
             # get learning data
             with self.lock:
-                states, actions, advantages = self.get_sample_from_train_buffer()
+                states, actions, advantages = self.get_data_from_train_buffer()
 
             # get policy and value
             policies, values = self.model(states)
@@ -30,11 +56,9 @@ class PPOLearner(AsyncLearner):
 
             # calculate loss
             loss_v = F.squared_error(values, np.array(advantages).astype(np.float32))
-            loss_ent = F.sum(policies * F.log(policies + 1.0e-10), axis=1, keepdims=True)
+            loss_ent = -policies.entropy()
 
-            # r = F.select_item(policies, actions) / F.select_item(old_policies, actions)
-            r = (F.select_item(policies, actions) + 1.0e-10) / (F.select_item(old_policies, actions) + 1.0e-10)
-            r = F.reshape(r, (len(states), 1))
+            r = (policies.get_prob(actions) + 1.0e-10) / (old_policies.get_prob(actions) + 1.0e-10)
             loss_clip = (advantages - values.data) * F.minimum(r, F.clip(r, 1.0 - self.eps, 1.0 + self.eps))
 
             loss = F.mean(-loss_clip + loss_v * 0.2 + 0.01 * loss_ent)
@@ -47,7 +71,7 @@ class PPOLearner(AsyncLearner):
 
 
 class PPO:
-    def __init__(self, model: DisCreteSoftMaxPolicyValueModel, make_env_func=None, *,
+    def __init__(self, model: PolicyValueModel, make_env_func=None, *,
                  lr=1e-3, batch_size=32, gamma=0.99, lam=0.95, t_max=8, clip_eps=0.2, num_episode=200,
                  num_steps_per_episode=200,
                  eps_start=0.4, eps_end=0.15, eps_steps=75000, num_train_per_episode=15):
@@ -94,7 +118,6 @@ class PPO:
                 next_state, reward, done, _ = env.step(action)
 
                 sar_que.append([state, action, reward])
-
                 learner.step += 1
                 episode_reward += reward
 
@@ -108,11 +131,11 @@ class PPO:
                     # here calculate A_t + V(s_t)
                     R = 0.0
                     if not done:
-                        R += self.gamma * model([state])[1].data[0][0]
+                        R += self.gamma * model.get_value([state]).data[0][0]
 
                     for s, a, r in reversed(sar_que):
                         R += r
-                        v = model([s])[1]
+                        v = model.get_value([s])
                         with learner.lock:
                             learner.push_train_buffer(s, a, [R])
                         R *= self.gamma * self.lam

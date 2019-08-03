@@ -6,26 +6,47 @@ import chainer.functions as F
 import threading
 import time
 
-from myML.rl.model import DisCreteSoftMaxPolicyValueModel
+from myML.rl.model import PolicyValueModel, DisCreteSoftMaxPolicyValueModel
 from myML.rl.learner import AsyncLearner
 
 
 class A3CLearner(AsyncLearner):
+    def clear_buffer(self):
+        self.train_buffer=[[],[],[]]
+
+    def push_train_buffer(self, state, action, advantage):
+        self.train_buffer[0].append(state)
+        self.train_buffer[1].append(action)
+        self.train_buffer[2].append(advantage)
+
+    def get_data_from_train_buffer(self):
+        # get train data
+        states, actions, advantages = self.train_buffer
+
+        # clear buffer
+        self.clear_buffer()
+
+        # rearange data
+        states = np.array(states).astype(np.float32)
+        actions = np.array(actions).astype(np.int32)
+        advantages = np.array(advantages).astype(np.float32)
+
+        return states, actions, advantages
+
     def update_model(self):
         # get learning data
         with self.lock:
-            if not self.is_adequate_num_data():
+            if len(self.train_buffer[0]) < self.batch_size:
                 time.sleep(0)
                 return
-            states, actions, advantages = self.get_train_buffer()
+            states, actions, advantages = self.get_data_from_train_buffer()
 
         # get policy and value
         policies, values = self.model(states)
         # calculate loss
         loss_v = F.squared_error(values, advantages)
-        loss_pi = (advantages - values.data) * F.reshape(F.log(
-            F.select_item(policies, actions) + 1.0e-10), (len(states), 1))
-        loss_ent = F.sum(policies * F.log(policies + 1.0e-10), axis=1, keepdims=True)
+        loss_pi = (advantages - values.data) * policies.get_log_prob(actions)
+        loss_ent = -policies.entropy()
 
         loss = F.mean(loss_v * 0.5 - loss_pi + 0.01 * loss_ent)
 
@@ -35,7 +56,7 @@ class A3CLearner(AsyncLearner):
 
 
 class A3C:
-    def __init__(self, model: DisCreteSoftMaxPolicyValueModel, make_env_func=None, *,
+    def __init__(self, model: PolicyValueModel, make_env_func=None, *,
                  lr=1e-3, batch_size=32, gamma=0.99, t_max=8, num_episode=200, num_steps_per_episode=200,
                  eps_start=0.4, eps_end=0.15, eps_steps=75000):
         if make_env_func is None:
@@ -88,7 +109,7 @@ class A3C:
 
                 if t % self.t_max == 0 or done:
                     # calculate and push advantage type train data by backward
-                    R = 0.0 if done else model([state])[1].data[0][0]
+                    R = 0.0 if done else model.get_value([state]).data[0][0]
 
                     for s, a, r in reversed(sar_que):
                         R = r + self.gamma * R

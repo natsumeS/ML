@@ -12,50 +12,36 @@ class Learner(metaclass=ABCMeta):
         self.optimizer = optimizer
         self.optimizer.setup(self.model)
 
-        # train buffer : [[state],[action],[advantage]]
-        self.train_buffer = [[], [], []]
+        # train buffer
+        self.train_buffer = None
+        self.clear_buffer()
         self.batch_size = batch_size
 
-    def push_train_buffer(self, state, action, advantage):
-        self.train_buffer[0].append(state)
-        self.train_buffer[1].append(action)
-        self.train_buffer[2].append(advantage)
+    @abstractmethod
+    def clear_buffer(self):
+        pass
 
-    def is_adequate_num_data(self):
-        return len(self.train_buffer[0]) >= self.batch_size
+    @abstractmethod
+    def push_train_buffer(self,*args):
+        pass
 
-    def get_train_buffer(self):
-        # get train data
-        states, actions, advantages = self.train_buffer
+    @abstractmethod
+    def get_data_from_train_buffer(self):
+        pass
 
-        # clear buffer
-        self.train_buffer = [[], [], []]
-
-        # rearange data
-        states = np.array(states).astype(np.float32)
-        actions = np.array(actions).astype(np.int32)
-        advantages = np.array(advantages).astype(np.float32)
-
-        return states, actions, advantages
-
-    def get_sample_from_train_buffer(self):
-        batch_size = self.batch_size if len(self.train_buffer[0]) > self.batch_size else len(self.train_buffer[0])
-
-        datas_index = random.sample(range(len(self.train_buffer[0])), batch_size)
-
-        # rearange dates
-        states = []
-        actions = []
-        advantages = []
-        for index in datas_index:
-            states.append(self.train_buffer[0][index])
-            actions.append(self.train_buffer[1][index])
-            advantages.append(self.train_buffer[2][index])
-
-        states = np.array(states).astype(np.float32)
-        actions = np.array(actions).astype(np.int32)
-        advantages = np.array(advantages).astype(np.float32)
-        return states, actions, advantages
+    # def get_train_buffer(self):
+    #     # get train data
+    #     states, actions, advantages = self.train_buffer
+    #
+    #     # clear buffer
+    #     self.train_buffer = [[], [], []]
+    #
+    #     # rearange data
+    #     states = np.array(states).astype(np.float32)
+    #     actions = np.array(actions).astype(np.int32)
+    #     advantages = np.array(advantages).astype(np.float32)
+    #
+    #     return states, actions, advantages
 
     def get_model(self):
         return self.model
